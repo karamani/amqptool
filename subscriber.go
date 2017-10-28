@@ -9,13 +9,12 @@ import (
 // AMQPSubscriber contains data for subscribing to messages from the queue.
 type AMQPSubscriber struct {
 	CnnString     string
-	Exchange      string
 	Queue         string
 	PrefetchCount int
 }
 
-func NewAMQPSubscriber(cnn, exchange, queue string, prefetchCount int) *AMQPSubscriber {
-	return &AMQPSubscriber{CnnString: cnn, Exchange: exchange, Queue: queue, PrefetchCount: prefetchCount}
+func NewAMQPSubscriber(cnn, queue string, prefetchCount int) *AMQPSubscriber {
+	return &AMQPSubscriber{CnnString: cnn, Queue: queue, PrefetchCount: prefetchCount}
 }
 
 func (pc *AMQPSubscriber) Process(h func([]byte) error) error {
@@ -32,47 +31,21 @@ func (pc *AMQPSubscriber) Process(h func([]byte) error) error {
 	}
 	defer ch.Close()
 
-	durable, noAutodelete, noExclusive, noWait := true, false, false, false
-	err = ch.ExchangeDeclare(
-		pc.Exchange,
-		"fanout",
-		durable,
-		noAutodelete,
-		noExclusive,
-		noWait,
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to declare an exchange %s", err.Error())
-	}
-
 	err = ch.Qos(pc.PrefetchCount, 0, false)
 	if err != nil {
 		return fmt.Errorf("qos error %s", err.Error())
 	}
 
-	deleteWhenUnused := false
-	q, err := ch.QueueDeclare(
+	q, err := ch.QueueDeclarePassive(
 		pc.Queue,
 		true,
-		deleteWhenUnused,
 		false,
-		false, // подтверждаем сам факт обработки без привязки к результату
+		false,
+		false,
 		nil,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to declare a queue %s", err.Error())
-	}
-
-	err = ch.QueueBind(
-		q.Name,
-		"",
-		pc.Exchange,
-		false,
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to bind a queue %s", err.Error())
 	}
 
 	msgs, err := ch.Consume(
@@ -97,7 +70,9 @@ func (pc *AMQPSubscriber) Process(h func([]byte) error) error {
 					d.Ack(false)
 				}()
 
-				h(d.Body)
+				if err := h(d.Body); err != nil {
+					// TODO
+				}
 			}(d)
 		}
 
