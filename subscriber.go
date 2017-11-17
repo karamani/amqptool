@@ -6,20 +6,43 @@ import (
 	"github.com/streadway/amqp"
 )
 
-// AMQPSubscriber contains data for subscribing to messages from the queue.
-type AMQPSubscriber struct {
-	CnnString     string
+// Subscriber contains data for subscribing to messages from the queue.
+type Subscriber struct {
+	Connection    string
 	Queue         string
+	Exchange      string
 	PrefetchCount int
+	QueueOpt      QueueOpt
+	ConsumeOpt    ConsumeOpt
 }
 
-func NewAMQPSubscriber(cnn, queue string, prefetchCount int) *AMQPSubscriber {
-	return &AMQPSubscriber{CnnString: cnn, Queue: queue, PrefetchCount: prefetchCount}
+// NewSubscriber create & init the Subscriber struct.
+func NewSubscriber(cnn, queue string) *Subscriber {
+	return &Subscriber{
+		Connection: cnn,
+		Queue:      queue,
+		QueueOpt: QueueOpt{
+			Durable: true,
+		},
+	}
 }
 
-func (pc *AMQPSubscriber) Process(h func([]byte) error) error {
+// SetExchange set the Exchange field.
+func (s *Subscriber) SetExchange(ex string) *Subscriber {
+	s.Exchange = ex
+	return s
+}
 
-	conn, err := amqp.Dial(pc.CnnString)
+// SetPrefetchCount set the PrefetchCount field.
+func (s *Subscriber) SetPrefetchCount(n int) *Subscriber {
+	s.PrefetchCount = n
+	return s
+}
+
+// Process starts a message loop.
+func (s *Subscriber) Process(h func([]byte) error) error {
+
+	conn, err := amqp.Dial(s.Connection)
 	if err != nil {
 		return fmt.Errorf("failed to connect to RabbitMQ %s", err.Error())
 	}
@@ -31,31 +54,35 @@ func (pc *AMQPSubscriber) Process(h func([]byte) error) error {
 	}
 	defer ch.Close()
 
-	err = ch.Qos(pc.PrefetchCount, 0, false)
-	if err != nil {
+	if err := ch.Qos(s.PrefetchCount, 0, false); err != nil {
 		return fmt.Errorf("qos error %s", err.Error())
 	}
 
-	q, err := ch.QueueDeclarePassive(
-		pc.Queue,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
+	if _, err := ch.QueueDeclare(
+		s.Queue,
+		s.QueueOpt.Durable,
+		s.QueueOpt.AutoDelete,
+		s.QueueOpt.Exclusive,
+		s.QueueOpt.NoWait,
+		amqp.Table(s.QueueOpt.Args)); err != nil {
+
 		return fmt.Errorf("failed to declare a queue %s", err.Error())
 	}
 
+	if len(s.Exchange) > 0 {
+		if err := ch.QueueBind(s.Queue, "", s.Exchange, false, nil); err != nil {
+			return fmt.Errorf("failed to bind a queue %s", err.Error())
+		}
+	}
+
 	msgs, err := ch.Consume(
-		q.Name,
-		"",    // consumer
-		false, // auto-ack
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,   // args
+		s.Queue,
+		s.ConsumeOpt.Consumer,
+		s.ConsumeOpt.AutoAck,
+		s.ConsumeOpt.Exclusive,
+		s.ConsumeOpt.NoLocal,
+		s.ConsumeOpt.NoWait,
+		amqp.Table(s.ConsumeOpt.Args),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to register a consumer %s", err.Error())
@@ -69,10 +96,7 @@ func (pc *AMQPSubscriber) Process(h func([]byte) error) error {
 				defer func() {
 					d.Ack(false)
 				}()
-
-				if err := h(d.Body); err != nil {
-					// TODO
-				}
+				h(d.Body)
 			}(d)
 		}
 
@@ -81,7 +105,7 @@ func (pc *AMQPSubscriber) Process(h func([]byte) error) error {
 
 	select {
 	case err = <-ch.NotifyClose(make(chan *amqp.Error)):
-		err = fmt.Errorf("NotifyClose %s", err.Error())
+		err = fmt.Errorf("error from amqp.NotifyClose %s", err.Error())
 	case <-forever:
 		err = nil
 	}

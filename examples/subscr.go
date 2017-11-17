@@ -7,15 +7,18 @@ import (
 	"github.com/karamani/amqptool"
 )
 
-var amqpCnnArg string
+var cnnArg, queueArg, exArg string
 
 func init() {
-	flag.StringVar(&amqpCnnArg, "cnn", "", "amqp connection string")
+	flag.StringVar(&cnnArg, "cnn", "", "amqp connection string")
+	flag.StringVar(&queueArg, "q", "", "queue name")
+	flag.StringVar(&exArg, "ex", "", "exchange name")
 	flag.Parse()
 }
 
 func main() {
-	if err := amqptool.NewAMQPSubscriber(amqpCnnArg, "amqptooltst", 0).Process(handleOneMessage); err != nil {
+	s := amqptool.NewSubscriber(cnnArg, queueArg).BindExchange(exArg)
+	if err := s.Process(handleOneMessage); err != nil {
 		log.Fatalln(err.Error())
 	}
 }
