@@ -17,7 +17,7 @@ func init() {
 }
 
 func main() {
-	s := amqptool.NewSubscriber(cnnArg, queueArg).BindExchange(exArg)
+	s := amqptool.NewSubscriber(cnnArg, queueArg).SetExchange(exArg)
 	if err := s.Process(handleOneMessage); err != nil {
 		log.Fatalln(err.Error())
 	}
