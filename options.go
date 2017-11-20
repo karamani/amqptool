@@ -1,5 +1,15 @@
 package amqptool
 
+// ExchangeOpt contains options for the exchange.
+type ExchangeOpt struct {
+	Kind       string
+	Durable    bool
+	Autodelete bool
+	Internal   bool
+	NoWait     bool
+	Args       map[string]interface{}
+}
+
 // QueueOpt contains options for the queue.
 type QueueOpt struct {
 	Durable    bool
