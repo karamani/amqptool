@@ -18,7 +18,9 @@ type Sender struct {
 	ExchangeDeclare bool
 	ExchangeOpt     ExchangeOpt
 	Err             chan error
-	inC             chan message
+
+	inC       chan message
+	connected bool
 }
 
 // NewSender create & init the Sender struct.
@@ -31,8 +33,6 @@ func NewSender(cnn, exchange string) *Sender {
 			Durable: true,
 			Kind:    "direct",
 		},
-		Err: make(chan error),
-		inC: make(chan message),
 	}
 }
 
@@ -72,18 +72,33 @@ func (s *Sender) Connect() error {
 }
 
 // Send sends a message to the exchange with a certain key.
-func (s *Sender) Send(body []byte, routingKey string) {
+func (s *Sender) Send(body []byte, routingKey string) error {
+
+	if !s.connected {
+		return fmt.Errorf("not connected")
+	}
+
 	msg := message{
 		RoutingKey: routingKey,
 		Body:       body,
 	}
 	s.inC <- msg
+
+	return nil
 }
 
 func (s *Sender) start(conn *amqp.Connection, ch *amqp.Channel) {
 
-	defer conn.Close()
-	defer ch.Close()
+	defer func() {
+		ch.Close()
+		conn.Close()
+		s.connected = false
+		close(s.inC)
+		close(s.Err)
+	}()
+
+	s.Err = make(chan error)
+	s.inC = make(chan message)
 
 	forever := make(chan error)
 
@@ -105,6 +120,8 @@ func (s *Sender) start(conn *amqp.Connection, ch *amqp.Channel) {
 		}
 		forever <- nil
 	}()
+
+	s.connected = true
 
 	select {
 	case err := <-ch.NotifyClose(make(chan *amqp.Error)):
