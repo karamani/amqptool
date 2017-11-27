@@ -17,8 +17,8 @@ type Sender struct {
 	Exchange        string
 	ExchangeDeclare bool
 	ExchangeOpt     ExchangeOpt
-	Err             chan error
 
+	errors    []chan error
 	inC       chan message
 	connected bool
 }
@@ -78,13 +78,18 @@ func (s *Sender) Send(body []byte, routingKey string) error {
 		return fmt.Errorf("not connected")
 	}
 
-	msg := message{
+	s.inC <- message{
 		RoutingKey: routingKey,
 		Body:       body,
 	}
-	s.inC <- msg
 
 	return nil
+}
+
+// NotifyError registers a listener for when the server sends a exception.
+func (s *Sender) NotifyError(c chan error) chan error {
+	s.errors = append(s.errors, c)
+	return c
 }
 
 func (s *Sender) start(conn *amqp.Connection, ch *amqp.Channel) {
@@ -94,10 +99,8 @@ func (s *Sender) start(conn *amqp.Connection, ch *amqp.Channel) {
 		conn.Close()
 		s.connected = false
 		close(s.inC)
-		close(s.Err)
 	}()
 
-	s.Err = make(chan error)
 	s.inC = make(chan message)
 
 	forever := make(chan error)
@@ -125,10 +128,16 @@ func (s *Sender) start(conn *amqp.Connection, ch *amqp.Channel) {
 
 	select {
 	case err := <-ch.NotifyClose(make(chan *amqp.Error)):
-		s.Err <- fmt.Errorf("NotifyClose %s", err.Error())
+		s.sendError(fmt.Errorf("NotifyClose %s", err.Error()))
 	case err := <-forever:
 		if err != nil {
-			s.Err <- err
+			s.sendError(err)
 		}
+	}
+}
+
+func (s *Sender) sendError(e error) {
+	for _, c := range s.errors {
+		c <- e
 	}
 }
