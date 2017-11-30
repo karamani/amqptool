@@ -19,7 +19,7 @@ type QueueOpt struct {
 	Args       map[string]interface{}
 }
 
-// ConsumeOpt contains options for the Consumer.
+// ConsumeOpt contains options for the consumer.
 type ConsumeOpt struct {
 	Consumer  string
 	AutoAck   bool
