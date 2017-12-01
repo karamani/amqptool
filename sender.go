@@ -6,6 +6,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// message contains message key & body.
 type message struct {
 	RoutingKey string
 	Body       []byte
@@ -136,6 +137,7 @@ func (s *Sender) start(conn *amqp.Connection, ch *amqp.Channel) {
 	}
 }
 
+// sendError send a error for all listeners.
 func (s *Sender) sendError(e error) {
 	for _, c := range s.errors {
 		c <- e
