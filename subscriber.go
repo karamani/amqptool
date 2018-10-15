@@ -39,6 +39,15 @@ func (s *Subscriber) SetPrefetchCount(n int) *Subscriber {
 	return s
 }
 
+// AddQueueArg add argument to QueueOpt field.
+func (s *Subscriber) AddQueueArg(key string, value interface{}) *Subscriber {
+	if s.QueueOpt.Args == nil {
+		s.QueueOpt.Args = make(map[string]interface{})
+	}
+	s.QueueOpt.Args[key] = value
+	return s
+}
+
 // Process starts a message loop.
 func (s *Subscriber) Process(h func([]byte) error) error {
 
