@@ -47,8 +47,8 @@ func (s *Subscriber) SetPassiveMode(mode bool) *Subscriber {
 	return s
 }
 
-// SetAmpqConfig sets the AmpqConfig
-func (s *Subscriber) SetAmpqConfig(config amqp.Config) *Subscriber {
+// SetAmqpConfig sets the AmqpConfig
+func (s *Subscriber) SetAmqpConfig(config amqp.Config) *Subscriber {
 	s.AmqpConfig = &config
 	return s
 }
