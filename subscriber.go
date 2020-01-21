@@ -12,6 +12,8 @@ type Subscriber struct {
 	Queue         string
 	Exchange      string
 	PrefetchCount int
+	PassiveMode   bool
+	AmqpConfig    *amqp.Config
 	QueueOpt      QueueOpt
 	ConsumeOpt    ConsumeOpt
 }
@@ -39,6 +41,18 @@ func (s *Subscriber) SetPrefetchCount(n int) *Subscriber {
 	return s
 }
 
+// SetPassiveMode sets the Passive Mode status
+func (s *Subscriber) SetPassiveMode(mode bool) *Subscriber {
+	s.PassiveMode = mode
+	return s
+}
+
+// SetAmqpConfig sets the AmqpConfig
+func (s *Subscriber) SetAmqpConfig(config amqp.Config) *Subscriber {
+	s.AmqpConfig = &config
+	return s
+}
+
 // AddQueueArg add argument to QueueOpt field.
 func (s *Subscriber) AddQueueArg(key string, value interface{}) *Subscriber {
 	if s.QueueOpt.Args == nil {
@@ -51,7 +65,16 @@ func (s *Subscriber) AddQueueArg(key string, value interface{}) *Subscriber {
 // Process starts a message loop.
 func (s *Subscriber) Process(h func([]byte) error) error {
 
-	conn, err := amqp.Dial(s.Connection)
+	var (
+		conn *amqp.Connection
+		err  error
+	)
+	if s.AmqpConfig == nil {
+		conn, err = amqp.Dial(s.Connection)
+	} else {
+		conn, err = amqp.DialConfig(s.Connection, *s.AmqpConfig)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to connect to RabbitMQ %s", err.Error())
 	}
@@ -67,14 +90,25 @@ func (s *Subscriber) Process(h func([]byte) error) error {
 		return fmt.Errorf("qos error %s", err.Error())
 	}
 
-	if _, err := ch.QueueDeclare(
-		s.Queue,
-		s.QueueOpt.Durable,
-		s.QueueOpt.AutoDelete,
-		s.QueueOpt.Exclusive,
-		s.QueueOpt.NoWait,
-		amqp.Table(s.QueueOpt.Args)); err != nil {
+	if s.PassiveMode {
+		_, err = ch.QueueDeclarePassive(
+			s.Queue,
+			s.QueueOpt.Durable,
+			s.QueueOpt.AutoDelete,
+			s.QueueOpt.Exclusive,
+			s.QueueOpt.NoWait,
+			amqp.Table(s.QueueOpt.Args))
+	} else {
+		_, err = ch.QueueDeclare(
+			s.Queue,
+			s.QueueOpt.Durable,
+			s.QueueOpt.AutoDelete,
+			s.QueueOpt.Exclusive,
+			s.QueueOpt.NoWait,
+			amqp.Table(s.QueueOpt.Args))
+	}
 
+	if err != nil {
 		return fmt.Errorf("failed to declare a queue %s", err.Error())
 	}
 
