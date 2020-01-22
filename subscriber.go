@@ -76,18 +76,18 @@ func (s *Subscriber) Process(h func([]byte) error) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to connect to RabbitMQ %s", err.Error())
+		return fmt.Errorf("failed to connect to RabbitMQ %w", err)
 	}
 	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
-		return fmt.Errorf("failed to open a channel %s", err.Error())
+		return fmt.Errorf("failed to open a channel %w", err)
 	}
 	defer ch.Close()
 
 	if err := ch.Qos(s.PrefetchCount, 0, false); err != nil {
-		return fmt.Errorf("qos error %s", err.Error())
+		return fmt.Errorf("qos error %w", err)
 	}
 
 	if s.PassiveMode {
@@ -109,12 +109,12 @@ func (s *Subscriber) Process(h func([]byte) error) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to declare a queue %s", err.Error())
+		return fmt.Errorf("failed to declare a queue %w", err)
 	}
 
 	if len(s.Exchange) > 0 {
 		if err := ch.QueueBind(s.Queue, "", s.Exchange, false, nil); err != nil {
-			return fmt.Errorf("failed to bind a queue %s", err.Error())
+			return fmt.Errorf("failed to bind a queue %w", err)
 		}
 	}
 
@@ -128,7 +128,7 @@ func (s *Subscriber) Process(h func([]byte) error) error {
 		amqp.Table(s.ConsumeOpt.Args),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to register a consumer %s", err.Error())
+		return fmt.Errorf("failed to register a consumer %w", err)
 	}
 
 	forever := make(chan bool)
@@ -148,7 +148,7 @@ func (s *Subscriber) Process(h func([]byte) error) error {
 
 	select {
 	case err = <-ch.NotifyClose(make(chan *amqp.Error)):
-		err = fmt.Errorf("error from amqp.NotifyClose %s", err.Error())
+		err = fmt.Errorf("error from amqp.NotifyClose %w", err)
 	case <-forever:
 		err = nil
 	}

@@ -129,7 +129,7 @@ func (s *Sender) start(conn *amqp.Connection, ch *amqp.Channel) {
 
 	select {
 	case err := <-ch.NotifyClose(make(chan *amqp.Error)):
-		s.sendError(fmt.Errorf("NotifyClose %s", err.Error()))
+		s.sendError(fmt.Errorf("NotifyClose %w", err))
 	case err := <-forever:
 		if err != nil {
 			s.sendError(err)
