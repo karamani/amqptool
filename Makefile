@@ -3,7 +3,7 @@ configure:
 
 compile:
 	goimports -w ./*.go
-	go tool vet ./*.go
+	go vet ./*.go
 	golint
 	go test
 	go install
